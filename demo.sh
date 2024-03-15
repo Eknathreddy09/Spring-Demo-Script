@@ -3,10 +3,10 @@
 # Load helper functions and set initial variables
 vendir sync
 . ./vendir/demo-magic/demo-magic.sh
-export TYPE_SPEED=100
+export TYPE_SPEED=50
 export DEMO_PROMPT="${GREEN}➜ ${CYAN}\W ${COLOR_RESET}"
-TEMP_DIR="upgrade-example"
-PROMPT_TIMEOUT=5
+TEMP_DIR="spring-demo-eknath"
+PROMPT_TIMEOUT=10
 
 # Function to pause and clear the screen
 function talkingPoint() {
@@ -25,6 +25,7 @@ function initSDKman() {
   fi
   sdk update
   sdk install java 8.0.392-librca
+  sdk install java 17.0.9-librca
   sdk install java 21.0.1-graalce
 }
 
@@ -40,13 +41,20 @@ function init {
 function useJava8 {
   displayMessage "Use Java 8, this is for educational purposes only, don't do this at home! (I have jokes.)"
   pei "sdk use java 8.0.392-librca"
-  pei "java -version" 
+  pei "java -version"
+}
+
+# Switch to Java 17 and display version
+function useJava21 {
+  displayMessage "Switch to Java 17 for Spring Boot 3"
+  pei "sdk use java 21.0.1-graalce"
+  pei "java -version"
 }
 
 # Switch to Java 21 and display version
-function useJava21 {
+function useJava17 {
   displayMessage "Switch to Java 21 for Spring Boot 3"
-  pei "sdk use java 21.0.1-graalce"
+  pei "sdk use java 17.0.9-librca"
   pei "java -version"
 }
 
@@ -84,10 +92,34 @@ function showMemoryUsage {
   echo "${mem_usage}" >> "$log_file"
 }
 
+# Prepare the dependencies file for 2.6
+function sharreport26 {
+  displayMessage "Prepare the dependencies file for SHAR Report"
+  pei "./mvnw dependency:tree | grep -E '(org.springframework|io.micrometer)' > /Users/reddye/Desktop/SHARreports/spring-dependencies26.txt"
+}
+
+# Upgrade the application to Spring Boot 3.0
+function rewriteApplication30 {
+  displayMessage "Upgrade to Spring Boot 3.0"
+  pei "./mvnw -U org.openrewrite.maven:rewrite-maven-plugin:run -Drewrite.recipeArtifactCoordinates=org.openrewrite.recipe:rewrite-spring:RELEASE -Drewrite.activeRecipes=org.openrewrite.java.spring.boot3.UpgradeSpringBoot_3_0"
+}
+
+# Prepare the dependencies file for 3.0
+function sharreport30 {
+  displayMessage "Prepare the dependencies file for SHAR Report"
+  pei "./mvnw dependency:tree | grep -E '(org.springframework|io.micrometer)' > /Users/reddye/Desktop/SHARreports/spring-dependencies30.txt"
+}
+
 # Upgrade the application to Spring Boot 3.2
 function rewriteApplication {
   displayMessage "Upgrade to Spring Boot 3.2"
   pei "./mvnw -U org.openrewrite.maven:rewrite-maven-plugin:run -Drewrite.recipeArtifactCoordinates=org.openrewrite.recipe:rewrite-spring:LATEST -DactiveRecipes=org.openrewrite.java.spring.boot3.UpgradeSpringBoot_3_2"
+}
+
+# Prepare the dependencies file for 3.2
+function sharreport32 {
+  displayMessage "Prepare the dependencies file for SHAR Report"
+  pei "./mvnw dependency:tree | grep -E '(org.springframework|io.micrometer)' > /Users/reddye/Desktop/SHARreports/spring-dependencies32.txt"
 }
 
 # Build a native image of the application
@@ -136,6 +168,11 @@ function statsSoFar {
   echo "The process was using $(cat java8with2.6.log2) megabytes"
   echo ""
   echo ""
+  echo "Spring Boot 3.0 with Java 17"
+  grep -o 'Started HelloSpringApplication in .*' < java17with3.0.log
+  echo "The process was using $(cat java17with3.0.log2) megabytes"
+  echo ""
+  echo ""
   echo "Spring Boot 3.2 with Java 21"
   grep -o 'Started HelloSpringApplication in .*' < java21with3.2.log
   echo "The process was using $(cat java21with3.2.log2) megabytes"
@@ -147,11 +184,12 @@ function statsSoFar {
   echo ""
   echo ""
   MEM1="$(grep '\S' java8with2.6.log2)"
+  MEM4="$(grep '\S' java17with3.0.log2)"
   MEM2="$(grep '\S' java21with3.2.log2)"
   MEM3="$(grep '\S' nativeWith3.2.log2)"
   echo ""
   echo "The Spring Boot 3.2 with Java 21 version is using $(bc <<< "scale=2; ${MEM2}/${MEM1}*100")% of the original footprint"
-  echo "The Spring Boot 3.2 with AOT processing version is using $(bc <<< "scale=2; ${MEM3}/${MEM1}*100")% of the original footprint" 
+  echo "The Spring Boot 3.2 with AOT processing version is using $(bc <<< "scale=2; ${MEM3}/${MEM1}*100")% of the original footprint"
 }
 
 function statsSoFarTable {
@@ -159,28 +197,48 @@ function statsSoFarTable {
   echo ""
 
   # Headers
-  printf "%-35s %-25s %-15s %s\n" "Configuration" "Startup Time (seconds)" "(MB) Used" "(MB) Savings"
-  echo "--------------------------------------------------------------------------------------------"
+  printf "%-35s %-25s %-15s %-15s %-15s %-15s %s\n" "Configuration" "Startup Time(seconds)" "(MB)Used" "(MB)Savings" "(Lib without OSS Support)" "(Lib with Vulnerabilities)" "(Lib with High Effort Upgrades)"
+  echo "-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
 
   # Spring Boot 2.6 with Java 8
   #STARTUP1=$(sed -nE 's/.* in ([0-9]+\.[0-9]+) seconds.*/\1/p' < java8with2.6.log)
   #STARTUP1=$(grep -o 'Started HelloSpringApplication in .*' < java8with2.6.log)
   MEM1=$(cat java8with2.6.log2)
-  printf "%-35s %-25s %-15s %s\n" "Spring Boot 2.6 with Java 8" "$(startupTime 'java8with2.6.log')" "$MEM1" "-"
+  printf "%-35s %-25s %-15s %-20s %-25s %-25s %s\n" "Spring Boot 2.6 with Java 8" "$(startupTime 'java8with2.6.log')" "$MEM1" "-" "61%" "91%" "96%"
+  
+# Spring Boot 3.0 with Java 17
+  #STARTUP4=$(sed -nE 's/.* in ([0-9]+\.[0-9]+) seconds.*/\1/p' < java17with3.0.log)
+  #STARTUP4=$(grep -o 'Started HelloSpringApplication in .*' < java17with3.0.log)
+  MEM4=$(cat java17with3.0.log2)
+  PERC4=$(bc <<< "scale=2; 100 - ${MEM4}/${MEM1}*100")
+  printf "%-35s %-25s %-15s %-20s %-25s %-25s %s\n" "Spring Boot 3.0 with Java 17" "$(startupTime 'java17with3.0.log')" "$MEM4" "$PERC4%" "64%" "32%" "0%"
 
   # Spring Boot 3.2 with Java 21
   #STARTUP2=$(grep -o 'Started HelloSpringApplication in .*' < java21with3.2.log)
   MEM2=$(cat java21with3.2.log2)
   PERC2=$(bc <<< "scale=2; 100 - ${MEM2}/${MEM1}*100")
-  printf "%-35s %-25s %-15s %s \n" "Spring Boot 3.2 with Java 21" "$(startupTime 'java21with3.2.log')" "$MEM2" "$PERC2%"
+  printf "%-35s %-25s %-15s %-20s %-25s %-25s %s \n" "Spring Boot 3.2 with Java 21" "$(startupTime 'java21with3.2.log')" "$MEM2" "$PERC2%" "0%" "0%" "0%"
 
   # Spring Boot 3.2 with AOT processing, native image
   #STARTUP3=$(grep -o 'Started HelloSpringApplication in .*' < nativeWith3.2.log)
   MEM3=$(cat nativeWith3.2.log2)
   PERC3=$(bc <<< "scale=2; 100 - ${MEM3}/${MEM1}*100")
-  printf "%-35s %-25s %-15s %s \n" "Spring Boot 3.2 with AOT, native" "$(startupTime 'nativeWith3.2.log')" "$MEM3" "$PERC3%"
+  printf "%-35s %-25s %-15s %-20s %-25s %-25s %s \n" "Spring Boot 3.2 with AOT, native" "$(startupTime 'nativeWith3.2.log')" "$MEM3" "$PERC3%" "0%" "0%" "0%"
 
-  echo "--------------------------------------------------------------------------------------------"
+  echo "--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
+}
+
+function recommendation {
+  displayMessage " Recommendations from Spring Team after reviewing the SHAR reports"
+  echo "-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
+  echo ""
+  echo "For Application using Spring 2.6, It is recommended to upgrade to 3.2 with help of Spring Consulting team or purchase spring runtime to extend your support until Mar 13, 2025, for 9 libraries which are set to expire in 5 months"
+  echo ""
+  echo "For Application using Spring 3.0, Either upgrade to 3.2.x or Purchase Spring Runtime to extend your support until Mar 13, 2025 to avoid the risk of any vulnerabilities"
+  echo ""
+  echo "For Application using spring 3.2, Purchase Spring Runtime to extend your support until Mar 13, 2025 , for 26 libraries which are set to expire in 8 months"
+  echo ""
+  echo "-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
 }
 
 # Display Docker image statistics
@@ -203,6 +261,19 @@ showMemoryUsage "$(jps | grep 'HelloSpringApplication' | cut -d ' ' -f 1)" java8
 talkingPoint
 springBootStop
 talkingPoint
+sharreport26
+useJava17
+rewriteApplication30
+springBootStart java17with3.0.log
+talkingPoint
+validateApp
+talkingPoint
+showMemoryUsage "$(jps | grep 'HelloSpringApplication' | cut -d ' ' -f 1)" java17with3.0.log2
+talkingPoint
+springBootStop
+talkingPoint
+sharreport30
+talkingPoint
 rewriteApplication
 talkingPoint
 useJava21
@@ -211,6 +282,7 @@ springBootStart java21with3.2.log
 talkingPoint
 validateApp
 talkingPoint
+sharreport32
 showMemoryUsage "$(jps | grep 'HelloSpringApplication' | cut -d ' ' -f 1)" java21with3.2.log2
 talkingPoint
 springBootStop
@@ -227,3 +299,4 @@ stopNative
 talkingPoint
 #statsSoFar
 statsSoFarTable
+recommendation
